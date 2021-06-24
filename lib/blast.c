@@ -33,7 +33,6 @@
 #include <setjmp.h>             /* for setjmp(), longjmp(), and jmp_buf */
 #include "blast.h"              /* prototype for blast() */
 
-#define local static            /* for local function definitions */
 #define MAXBITS 13              /* maximum code length */
 #define MAXWIN 4096             /* maximum window size */
 
@@ -69,7 +68,7 @@ struct state {
  *   buffer, using shift right, and new bytes are appended to the top of the
  *   bit buffer, using shift left.
  */
-local int bits(struct state *s, int need)
+static int bits(struct state *s, int need)
 {
     int val;            /* bit accumulator */
 
@@ -126,7 +125,7 @@ struct huffman {
  *   this ordering, the bits pulled during decoding are inverted to apply the
  *   more "natural" ordering starting with all zeros and incrementing.
  */
-local int decode(struct state *s, struct huffman *h)
+static int decode(struct state *s, struct huffman *h)
 {
     int len;            /* current number of bits in code */
     int code;           /* len bits being decoded */
@@ -188,7 +187,7 @@ local int decode(struct state *s, struct huffman *h)
  * it is possible for decode() using that table to return an error for received
  * codes past the end of the incomplete lengths.
  */
-local int construct(struct huffman *h, const unsigned char *rep, int n)
+static int construct(struct huffman *h, const unsigned char *rep, int n)
 {
     int symbol;         /* current symbol when stepping through length[] */
     int len;            /* current length when stepping through h->count[] */
@@ -279,7 +278,7 @@ local int construct(struct huffman *h, const unsigned char *rep, int n)
  *   ignoring whether the length is greater than the distance or not implements
  *   this correctly.
  */
-local int decomp(struct state *s)
+static enum BlastError decomp(struct state *s)
 {
     int lit;            /* true if literals are coded */
     int dict;           /* log2(dictionary size) - 6 */
@@ -322,9 +321,9 @@ local int decomp(struct state *s)
 
     /* read header */
     lit = bits(s, 8);
-    if (lit > 1) return -1;
+    if (lit > 1) return BLAST_WRONG_LITERAL_FLAG;
     dict = bits(s, 8);
-    if (dict < 4 || dict > 6) return -2;
+    if (dict < 4 || dict > 6) return BLAST_WRONG_DICTIONARY;
 
     /* decode literals and length/distance pairs */
     do {
@@ -340,7 +339,7 @@ local int decomp(struct state *s)
             dist += bits(s, symbol);
             dist++;
             if (s->first && dist > s->next)
-                return -3;              /* distance too far back */
+                return BLAST_DISTANCE_TOO_BIG;              /* distance too far back */
 
             /* copy length bytes from distance bytes back */
             do {
@@ -359,7 +358,7 @@ local int decomp(struct state *s)
                     *to++ = *from++;
                 } while (--copy);
                 if (s->next == MAXWIN) {
-                    if (s->outfun(s->outhow, s->out, s->next)) return 1;
+                    if (s->outfun(s->outhow, s->out, s->next)) return BLAST_OUTPUT_ERROR;
                     s->next = 0;
                     s->first = 0;
                 }
@@ -370,21 +369,22 @@ local int decomp(struct state *s)
             symbol = lit ? decode(s, &litcode) : bits(s, 8);
             s->out[s->next++] = symbol;
             if (s->next == MAXWIN) {
-                if (s->outfun(s->outhow, s->out, s->next)) return 1;
+                if (s->outfun(s->outhow, s->out, s->next)) return BLAST_OUTPUT_ERROR;
                 s->next = 0;
                 s->first = 0;
             }
         }
     } while (1);
-    return 0;
+    return BLAST_SUCCESS;
 }
 
+
 /* See comments in blast.h */
-int blast(blast_in infun, void *inhow, blast_out outfun, void *outhow,
+enum BlastError blast(blast_in infun, void *inhow, blast_out outfun, void *outhow,
           unsigned *left, unsigned char **in)
 {
     struct state s;             /* input/output state */
-    int err;                    /* return value */
+    enum BlastError err;        /* return value */
 
     /* initialize input state */
     s.infun = infun;
@@ -406,7 +406,7 @@ int blast(blast_in infun, void *inhow, blast_out outfun, void *outhow,
 
     /* return if bits() or decode() tries to read past available input */
     if (setjmp(s.env) != 0)             /* if came back here via longjmp(), */
-        err = 2;                        /*  then skip decomp(), return error */
+        err = BLAST_INPUT_EXHAUSTED;    /*  then skip decomp(), return error */
     else
         err = decomp(&s);               /* decompress */
 
@@ -417,50 +417,7 @@ int blast(blast_in infun, void *inhow, blast_out outfun, void *outhow,
         *in = s.left ? s.in : NULL;
 
     /* write any leftover output and update the error code if needed */
-    if (err != 1 && s.next && s.outfun(s.outhow, s.out, s.next) && err == 0)
-        err = 1;
+    if (err != BLAST_OUTPUT_ERROR && s.next && s.outfun(s.outhow, s.out, s.next) && err == BLAST_SUCCESS)
+        err = BLAST_OUTPUT_ERROR;
     return err;
 }
-
-#ifdef TEST
-/* Example of how to use blast() */
-#include <stdio.h>
-#include <stdlib.h>
-
-#define CHUNK 16384
-
-local unsigned inf(void *how, unsigned char **buf)
-{
-    static unsigned char hold[CHUNK];
-
-    *buf = hold;
-    return fread(hold, 1, CHUNK, (FILE *)how);
-}
-
-local int outf(void *how, unsigned char *buf, unsigned len)
-{
-    return fwrite(buf, 1, len, (FILE *)how) != len;
-}
-
-/* Decompress a PKWare Compression Library stream from stdin to stdout */
-int main(void)
-{
-    int ret;
-    unsigned left;
-
-    /* decompress to stdout */
-    left = 0;
-    ret = blast(inf, stdin, outf, stdout, &left, NULL);
-    if (ret != 0)
-        fprintf(stderr, "blast error: %d\n", ret);
-
-    /* count any leftover bytes */
-    while (getchar() != EOF)
-        left++;
-    if (left)
-        fprintf(stderr, "blast warning: %u unused bytes of input\n", left);
-
-    /* return blast() error code */
-    return ret;
-}
-#endif

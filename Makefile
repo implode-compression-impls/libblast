@@ -1,8 +1,11 @@
-blast: blast.c blast.h
-	cc -DTEST -o blast blast.c
+libblast: ./src/blast.c ./include/blast.h
+	cc -shared -o ./build/lib/libblast.so ./lib/blast.c -I./include
 
-test: blast
-	blast < test.pk | cmp - test.txt
+blast: ./src/blast.c ./include/blast.h libblast
+	cc -o ./build/bin/blast ./src/blast.c -I./include -l:./build/lib/libblast.so
+
+test: ./build/bin/blast
+	./build/bin/blast < ./tests/test.pk | cmp - ./tests/test.txt
 
 clean:
-	rm -f blast blast.o
+	rm -f ./build/blast ./build/blast.o
