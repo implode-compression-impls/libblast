@@ -1,3 +1,4 @@
+#pragma once
 /* blast.h -- interface for blast.c
   Copyright (C) 2003, 2012, 2013 Mark Adler
   version 1.3, 24 Aug 2013
@@ -22,6 +23,20 @@
  */
 
 
+enum BlastError {
+	BLAST_SUCCESS = 0, //< successful decompression
+
+	// If there is not enough input available or there is not enough output space, then a positive error is returned.
+	BLAST_OUTPUT_ERROR = 1,  //< output error before completing decompression
+	BLAST_INPUT_EXHAUSTED = 2,  //< ran out of input before completing decompression
+
+	// Errors in the source data
+	BLAST_WRONG_LITERAL_FLAG = -1,  //< literal flag not zero or one
+	BLAST_WRONG_DICTIONARY = -2,  //< dictionary size not in 4..6
+	BLAST_DISTANCE_TOO_BIG = -3,  //< distance is too far back
+};
+
+
 /*
  * blast() decompresses the PKWare Data Compression Library (DCL) compressed
  * format.  It provides the same functionality as the explode() function in
@@ -41,9 +56,24 @@ typedef int (*blast_out)(void *how, unsigned char *buf, unsigned len);
  * what the provided functions need to do.
  */
 
+#ifdef _WIN32
+    #ifdef LIBBLAST_EXPORTS
+        #define LIBBLAST_API __declspec(dllexport)
+    #else
+        #define LIBBLAST_API __declspec(dllimport)
+    #endif
+#else
+    #ifdef libblast_EXPORTS
+        #define LIBBLAST_API __attribute__((visibility("default")))
+    #else
+        #define LIBBLAST_API
+    #endif
+#endif
 
-int blast(blast_in infun, void *inhow, blast_out outfun, void *outhow,
-          unsigned *left, unsigned char **in);
+#ifdef __cplusplus
+extern "C" {
+#endif
+LIBBLAST_API enum BlastError blast(blast_in infun, void *inhow, blast_out outfun, void *outhow, unsigned *left, unsigned char **in);
 /* Decompress input to output using the provided infun() and outfun() calls.
  * On success, the return value of blast() is zero.  If there is an error in
  * the source data, i.e. it is not in the proper format, then a negative value
@@ -69,15 +99,9 @@ int blast(blast_in infun, void *inhow, blast_out outfun, void *outhow,
  * read and *in points to them.  Otherwise *left is set to zero and *in is set
  * to NULL.  If left or in are NULL, then they are not set.
  *
- * The return codes are:
- *
- *   2:  ran out of input before completing decompression
- *   1:  output error before completing decompression
- *   0:  successful decompression
- *  -1:  literal flag not zero or one
- *  -2:  dictionary size not in 4..6
- *  -3:  distance is too far back
- *
  * At the bottom of blast.c is an example program that uses blast() that can be
  * compiled to produce a command-line decompression filter by defining TEST.
  */
+#ifdef __cplusplus
+}
+#endif
