@@ -1,0 +1,13 @@
+[submodule "tests/testDataset"]
+	path = tests/testDataset
+	url = https://github.com/implode-compression-impls/implode_test_files
+	branch = merged
+	shallow = true
+[submodule "cmake/Boilerplate"]
+	path = cmake/Boilerplate
+	url = https://github.com/KOLANICH-libs/Boilerplate.cmake
+	branch = master
+[submodule "cmake/DoxygenUtils"]
+	path = cmake/DoxygenUtils
+	url = https://github.com/KOLANICH-libs/DoxygenUtils.cmake
+	branch = master
