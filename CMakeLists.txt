@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.13)
 
+message(STATUS "We have moved from M$ GitHub to https://codeberg.org/implode-compression-impls/libblast , read why on https://codeberg.org/KOLANICH/Fuck-GuanTEEnomo . ")
+
 set(CMAKE_USE_RELATIVE_PATHS TRUE)
 project("blast")
 set("PROJECT_DESCRIPTION" "Free open source PKWare Data Compression Library (DCL) implementation")
